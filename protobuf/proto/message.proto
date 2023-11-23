@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+option go_package = "/proto";
+
+message ClientPingRequest {
+  bytes bytes=1;
+}
+
+message ServerPongResponse {
+  bytes bytes=1;
+}

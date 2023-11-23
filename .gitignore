@@ -1,0 +1,10 @@
+# Created by .ignore support plugin (hsz.mobi)
+.idea
+venv
+target
+output
+
+.DS_Store
+*.iml
+*.dylib
+go.sum
