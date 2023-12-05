@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"google.golang.org/protobuf/proto"
 	"io"
 	"log"
 	"math/rand"
@@ -14,7 +15,7 @@ import (
 	"time"
 
 	pb "GoServer/protobuf/proto"
-	"google.golang.org/protobuf/proto"
+	"github.com/xtaci/kcp-go"
 )
 
 const (
@@ -27,6 +28,7 @@ type MessageCtx struct {
 	actor   Actor
 	protoId int32
 	data    proto.Message
+	conv    int32
 }
 
 // Actor 模型中的 Actor
@@ -86,14 +88,23 @@ func main() {
 	// 启动线程池
 	startWorkGroup()
 
-	listener, err := net.Listen("tcp", port)
+	tcpListener, err := net.Listen("tcp", port)
 	if err != nil {
-		fmt.Printf("Error creating listener: %v\n", err)
+		fmt.Printf("Error creating tcpListener: %v\n", err)
 		return
 	}
-	defer listener.Close()
+	defer tcpListener.Close()
 
-	fmt.Printf("Server listening on port %s\n", port)
+	//listenAddress := "0.0.0.0" + port
+	kcpListener, err := kcp.ListenWithOptions("0.0.0.0:7080", nil, 0, 0)
+	if err != nil {
+		fmt.Printf("Error creating udpListener: %v\n", err)
+		return
+	}
+	defer kcpListener.Close()
+
+	fmt.Printf("TCPServer listening on port %s\n", port)
+	fmt.Printf("KCPServer listening on port %s\n", port)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	// 使用一个通道来处理关闭信号
@@ -107,14 +118,14 @@ func main() {
 		close(shutdown)
 	}()
 
-	// 启动一个 goroutine 专门处理连接事件
+	// 启动一个 goroutine 专门处理tcp连接事件
 	go func() {
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				conn, err := listener.Accept()
+				conn, err := tcpListener.Accept()
 				if err != nil {
 					continue
 				}
@@ -123,7 +134,28 @@ func main() {
 			}
 		}
 	}()
-	fmt.Printf("Server Startup Success!!!")
+	fmt.Printf("TCPServer Startup Success!!!")
+
+	// 启动一个 goroutine 专门处理udp连接时间
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+				conn, err := kcpListener.AcceptKCP()
+				if err != nil {
+					fmt.Printf("%s", err)
+					continue
+				}
+				go handleConnection(ctx, conn)
+			}
+		}
+	}()
+	fmt.Printf("UDPServer Startup Success!!!")
+
+	go delayTask()
+
 	// 使用通道等待关闭信号
 	<-shutdown
 	// 等待所有 worker 完成
@@ -147,9 +179,27 @@ func handleConnection(ctx context.Context, conn net.Conn) {
 func handleMessage(message MessageCtx) {
 	protoId := message.protoId
 	if protoId == 700 {
-		//fmt.Printf("receive data: %s", message.data)
-		response := pb.ServerPongResponse{}
-		sendData(message.actor, 701, &response)
+		pingReq := message.data.(*pb.ClientPingRequest)
+		//fmt.Printf("ping data: %s\n", pingReq.Bytes)
+		response := pb.ServerPongResponse{Bytes: pingReq.Bytes}
+		err := sendData(message.actor, 701, &response)
+		if err != nil {
+			return
+		}
+	}
+
+	if protoId == 702 {
+		response := pb.KcpConnectRsp{}
+		// 使用类型断言将 net.Conn 转换为 kcp.UDPSession
+		kcpConn, ok := message.actor.conn.(*kcp.UDPSession)
+		if !ok {
+			log.Fatal("Failed to convert net.Conn to kcp.UDPSession")
+		}
+		response.ConvId = kcpConn.GetConv()
+		err := sendData(message.actor, 703, &response)
+		if err != nil {
+			return
+		}
 	}
 }
 
@@ -260,7 +310,40 @@ var protocolIDToMessageType = map[int32]reflect.Type{
 	// int SERVER_PONG = 701;
 	700: reflect.TypeOf(&pb.ClientPingRequest{}),
 	701: reflect.TypeOf(&pb.ServerPongResponse{}),
+
+	// int KCP_REQ = 702
+	702: reflect.TypeOf(&pb.KcpConnectReq{}),
+	703: reflect.TypeOf(&pb.KcpConnectRsp{}),
+	// int KCP_RSP = 703
 	// 添加其他协议ID和消息类型的映射
+}
+
+func delayTask() {
+	time.Sleep(10 * time.Second)
+	conn, err := kcp.DialWithOptions("127.0.0.1:7080", nil, 10, 3)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close()
+
+	fmt.Println("Connected to KCP server")
+
+	// 发送数据
+	message := []byte("Hello, KCP Server!")
+	_, err = conn.Write(message)
+	if err != nil {
+		log.Println("Error writing:", err)
+		return
+	}
+
+	// 接收响应
+	buffer := make([]byte, 4096)
+	n, err := conn.Read(buffer)
+	if err != nil {
+		log.Println("Error reading:", err)
+		return
+	}
+	fmt.Printf("Received %d bytes: %s\n", n, buffer[:n])
 }
 
 /*func main() {

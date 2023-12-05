@@ -9,3 +9,11 @@ message ClientPingRequest {
 message ServerPongResponse {
   bytes bytes=1;
 }
+
+message KcpConnectReq {
+	string id =1;
+}
+
+message KcpConnectRsp {
+	uint32 convId=1;
+}
