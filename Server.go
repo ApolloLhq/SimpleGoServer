@@ -136,7 +136,7 @@ func main() {
 	}()
 	fmt.Printf("TCPServer Startup Success!!!")
 
-	// 启动一个 goroutine 专门处理udp连接时间
+	// 启动一个 goroutine 专门处理udp连接事件
 	go func() {
 		for {
 			select {
@@ -154,7 +154,7 @@ func main() {
 	}()
 	fmt.Printf("UDPServer Startup Success!!!")
 
-	go delayTask()
+	//go delayTask()
 
 	// 使用通道等待关闭信号
 	<-shutdown
@@ -319,109 +319,29 @@ var protocolIDToMessageType = map[int32]reflect.Type{
 }
 
 func delayTask() {
-	time.Sleep(10 * time.Second)
-	conn, err := kcp.DialWithOptions("127.0.0.1:7080", nil, 10, 3)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close()
+	time.Sleep(1 * time.Second)
+	for i := 0; i < 30; i++ {
+		go func() {
+			conn, err := kcp.DialWithOptions("127.0.0.1:8980", nil, 0, 0)
+			if err != nil {
+				log.Fatal(err)
+			}
+			defer conn.Close()
 
-	fmt.Println("Connected to KCP server")
+			fmt.Println("Connected to KCP server")
+			request := pb.KcpConnectReq{}
+			sendData(newActor(conn), 702, &request)
 
-	// 发送数据
-	message := []byte("Hello, KCP Server!")
-	_, err = conn.Write(message)
-	if err != nil {
-		log.Println("Error writing:", err)
-		return
-	}
-
-	// 接收响应
-	buffer := make([]byte, 4096)
-	n, err := conn.Read(buffer)
-	if err != nil {
-		log.Println("Error reading:", err)
-		return
-	}
-	fmt.Printf("Received %d bytes: %s\n", n, buffer[:n])
-}
-
-/*func main() {
-	listener, err := net.Listen("tcp", port)
-	if err != nil {
-		fmt.Printf("Error creating listener: %v\n", err)
-		return
-	}
-	defer listener.Close()
-
-	fmt.Printf("Server listening on port %s\n", port)
-
-	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			fmt.Printf("Error accepting connection: %v\n", err)
-			continue
-		}
-
-		go handleConnection(conn)
-	}
-}*/
-
-/*func handleConnection(conn net.Conn) {
-	defer conn.Close()
-
-	for {
-		// 读取数据
-		data, err := readData(conn)
-		if err != nil {
-			fmt.Printf("Error reading data: %v\n", err)
-			return
-		}
-
-		// 处理数据
-		response := processData(data)
-
-		// 发送响应
-		err = sendData(conn, response)
-		if err != nil {
-			fmt.Printf("Error sending data: %v\n", err)
-			return
-		}
+			for {
+				// 接收响应
+				buffer := make([]byte, 4096)
+				n, err := conn.Read(buffer)
+				if err != nil {
+					log.Println("Error reading:", err)
+					return
+				}
+				fmt.Printf("Received %d bytes: %s\n", n, buffer[:n])
+			}
+		}()
 	}
 }
-
-func readData(conn net.Conn) (*pb.PingRequest, error) {
-	buffer := make([]byte, 1024)
-	n, err := conn.Read(buffer)
-	if err != nil {
-		return nil, fmt.Errorf("error reading data: %v", err)
-	}
-
-	request := &pb.PingRequest{}
-	err = proto.Unmarshal(buffer[:n], request)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling data: %v", err)
-	}
-
-	return request, nil
-}
-
-func sendData(conn net.Conn, response *pb.PangResponse) error {
-	data, err := proto.Marshal(response)
-	if err != nil {
-		return fmt.Errorf("error marshalling response: %v", err)
-	}
-
-	_, err = conn.Write(data)
-	if err != nil {
-		return fmt.Errorf("error writing data: %v", err)
-	}
-
-	return nil
-}
-
-func processData(request *pb.PingRequest) *pb.PangResponse {
-	// 在这里处理请求并生成响应
-	message := fmt.Sprintf("Received message: %s", request.Name)
-	return &pb.PangResponse{Message: message}
-}*/
