@@ -169,7 +169,7 @@ func main() {
 	}()
 	fmt.Println("UDPServer Startup Success!!!")
 
-	go delayTask()
+	//go delayTask()
 
 	// 使用通道等待关闭信号
 	<-shutdown
