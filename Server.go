@@ -169,7 +169,7 @@ func main() {
 	}()
 	fmt.Println("UDPServer Startup Success!!!")
 
-	//go delayTask()
+	go delayTask()
 
 	// 使用通道等待关闭信号
 	<-shutdown
@@ -266,7 +266,7 @@ func readData(ctx context.Context, actor Actor) {
 		}
 
 		// 限制消息长度 1k
-		if msgLen <= 0 || msgLen > msgMaxLen {
+		if msgLen < 0 || msgLen > msgMaxLen {
 			fmt.Printf("Received message invalid msgLen: %d\n", msgLen)
 			return
 		}
@@ -400,11 +400,11 @@ func delayTask() {
 			defer conn.Close()
 
 			//fmt.Println("Connected to KCP server")
-			request := pb.KcpConnectReq{Id: "aaa"}
+			request := pb.KcpConnectReq{}
 			sendReq(conn, 702, &request)
 
 			time.Sleep(5 * time.Second)
 		}()
-		time.Sleep(50 * time.Second)
+		time.Sleep(5 * time.Second)
 	}
 }
