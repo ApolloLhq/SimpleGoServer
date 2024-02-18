@@ -236,32 +236,32 @@ func readData(ctx context.Context, actor Actor) {
 				//log.Println("Connection closed by client")
 				return
 			}
-			log.Printf("Error reading magic: %v", err)
+			//log.Printf("Error reading magic: %v", err)
 			return
 		}
 
 		// 读取数据长度
 		var msgLen uint32
 		if err := binary.Read(conn, binary.BigEndian, &msgLen); err != nil {
-			log.Printf("Error reading msgLen: %v", err)
+			//log.Printf("Error reading msgLen: %v", err)
 			return
 		}
 
 		// 读取协议ID
 		var protocolID int32
 		if err := binary.Read(conn, binary.BigEndian, &protocolID); err != nil {
-			log.Printf("Error reading protocol ID: %v", err)
+			//log.Printf("Error reading protocol ID: %v", err)
 			return
 		}
 		if protocolID <= 0 {
-			log.Printf("invalid protocol ID: %v", protocolID)
+			//log.Printf("invalid protocol ID: %v", protocolID)
 			return
 		}
 
 		// 读取crc
 		var crc int32
 		if err := binary.Read(conn, binary.BigEndian, &crc); err != nil {
-			log.Printf("Error reading crc: %v", err)
+			//log.Printf("Error reading crc: %v", err)
 			return
 		}
 
@@ -274,7 +274,7 @@ func readData(ctx context.Context, actor Actor) {
 		// 根据协议ID找到对应的消息类型
 		messageType, ok := protocolIDToMessageType[protocolID]
 		if !ok {
-			log.Printf("Unknown protocol ID: %d", protocolID)
+			//log.Printf("Unknown protocol ID: %d", protocolID)
 			return
 		}
 		// 创建对应的空消息实例
@@ -284,7 +284,7 @@ func readData(ctx context.Context, actor Actor) {
 		payload := make([]byte, msgLen)
 		_, err := io.ReadFull(conn, payload)
 		if err != nil {
-			log.Printf("Error reading payload: %v", err)
+			//log.Printf("Error reading payload: %v", err)
 			return
 		}
 
@@ -397,7 +397,7 @@ func heartbeatCheck(ctx context.Context, actor Actor) {
 			heartbeatTime := actor.heartbeatTime
 			// 检查是否超过80秒没有合法数据
 			if time.Now().Unix()-heartbeatTime > 80 {
-				log.Println("No heartbeat received. Closing connection:", conn.RemoteAddr().String())
+				//log.Println("No heartbeat received. Closing connection:", conn.RemoteAddr().String())
 				conn.Close()
 				return
 			}
