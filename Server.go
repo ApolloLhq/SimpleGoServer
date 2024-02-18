@@ -307,7 +307,7 @@ func sendData(actor Actor, protoId int32, message proto.Message) error {
 		return fmt.Errorf("error marshalling response: %v", err)
 	}
 
-	// 写入数据长度
+	/*// 写入数据长度
 	if err := binary.Write(conn, binary.BigEndian, uint32(len(data))); err != nil {
 		return err
 	}
@@ -316,6 +316,21 @@ func sendData(actor Actor, protoId int32, message proto.Message) error {
 	_ = binary.Write(conn, binary.BigEndian, uint32(protoId))
 
 	_, err = conn.Write(data)
+	if err != nil {
+		return fmt.Errorf("error writing data: %v", err)
+	}*/
+
+	sendBytes := make([]byte, 4+4+len(data))
+	lenBytes := make([]byte, 4)
+	protoIdBytes := make([]byte, 4)
+
+	binary.BigEndian.PutUint32(lenBytes, uint32(len(data)))
+	binary.BigEndian.PutUint32(protoIdBytes, uint32(protoId))
+	copy(sendBytes[:4], lenBytes)
+	copy(sendBytes[4:8], protoIdBytes)
+	copy(sendBytes[8:], data)
+
+	_, err = conn.Write(sendBytes)
 	if err != nil {
 		return fmt.Errorf("error writing data: %v", err)
 	}
@@ -372,7 +387,7 @@ var protocolIDToMessageType = map[int32]reflect.Type{
 
 func heartbeatCheck(ctx context.Context, actor Actor) {
 	for {
-		// 创建一个定时器，设置定时时间为10秒
+		// 创建一个定时器，设置定时时间为80秒
 		timer := time.NewTimer(80 * time.Second)
 		select {
 		case <-ctx.Done():
@@ -380,7 +395,7 @@ func heartbeatCheck(ctx context.Context, actor Actor) {
 		case <-timer.C:
 			conn := actor.conn
 			heartbeatTime := actor.heartbeatTime
-			// 检查是否超过90秒没有合法数据
+			// 检查是否超过80秒没有合法数据
 			if time.Now().Unix()-heartbeatTime > 80 {
 				log.Println("No heartbeat received. Closing connection:", conn.RemoteAddr().String())
 				conn.Close()
@@ -402,7 +417,26 @@ func delayTask() {
 			//fmt.Println("Connected to KCP server")
 			request := pb.KcpConnectReq{}
 			sendReq(conn, 702, &request)
+			var rspLen, rspProtoId int32
+			binary.Read(conn, binary.BigEndian, &rspLen)
+			binary.Read(conn, binary.BigEndian, &rspProtoId)
 
+			// 读取数据
+			payload := make([]byte, rspLen)
+			io.ReadFull(conn, payload)
+
+			// 根据协议ID找到对应的消息类型
+			messageType := protocolIDToMessageType[rspProtoId]
+			// 创建对应的空消息实例
+			message := reflect.New(messageType.Elem()).Interface().(proto.Message)
+			// 反序列化消息
+			if err := proto.Unmarshal(payload, message); err != nil {
+				log.Printf("Failed to unmarshal payload: %v", err)
+				return
+			}
+
+			log.Printf("Client receive Rsp len: %d, protoId: %d", rspLen, rspProtoId)
+			log.Printf("client receive data: %s", message)
 			time.Sleep(5 * time.Second)
 		}()
 		time.Sleep(5 * time.Second)
